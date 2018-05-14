@@ -1,29 +1,6 @@
-function [train_predict,train_accuracy,test_predict,test_accuracy]=kkr(trainX,trainY,testX,testY,option)
-% This is the  function to train and evaluate RVFL for classification
-% problem.
-% Option.N :      number of hidden neurons
-% Option.bias:    whether to have bias in the output neurons
-% option.link:    whether to have the direct link.
-% option.ActivationFunction:Activation Functions used.   
-% option.seed:    Random Seeds
-% option.mode     1: regularized least square, 2: Moore-Penrose pseudoinverse
-% option.kernelFlag true: use kernel
-% option.kernel   type: 'RBF_kernel' etc.
-% option.RandomType: different randomnization methods. Currently only support Gaussian and uniform.
-% option.Scale    Linearly scale the random features before feedinto the nonlinear activation function. 
-%                 In this implementation, we consider the threshold which lead to 0.99 of the maximum/minimum value of the activation function as the saturating threshold.
-%                 Option.Scale=0.9 means all the random features will be linearly scaled
-%                 into 0.9* [lower_saturating_threshold,upper_saturating_threshold].
-%option.Scalemode Scalemode=1 will scale the features for all neurons.
-%                 Scalemode=2  will scale the features for each hidden
-%                 neuron separately.
-%                 Scalemode=3 will scale the range of the randomization for
-%                 uniform diatribution.
+function [train_predict,train_accuracy,test_predict,test_accuracy]
+=kkr(trainX,trainY,testX,testY,option)
 
-% This software package has been developed by Le Zhang(c) 2015
-% based on this paper: A Comprehensive Evaluation of Random Vector Functional Link Neural Network Variants
-%  For technical support and/or help, please contact Lzhang027@e.ntu.edu.sg
-% This package has been downloaed from https://sites.google.com/site/zhangleuestc/
 if ~isfield(option,'N')|| isempty(option.N)
     option.N=100;
 end
@@ -92,91 +69,10 @@ end
 Bias_train=repmat(Bias,Nsample,1);
 H=trainX*Weight+Bias_train;
 
-switch lower(option.ActivationFunction)
-    case {'sig','sigmoid'}
-      
-        if option.Scale
-          
-            Saturating_threshold=[-4.6,4.6];
-            Saturating_threshold_activate=[0,1];
-            if option.Scalemode==1;
-         
-           [H,k,b]=Scale_feature(H,Saturating_threshold,option.Scale);
-            elseif option.Scalemode==2
-                
-           [H,k,b]=Scale_feature_separately(H,Saturating_threshold,option.Scale);
-            end
-        end
-        H = 1 ./ (1 + exp(-H));
-    case {'sin','sine'}
-       
-         
-        if option.Scale
-   
-           Saturating_threshold=[-pi/2,pi/2];
-           Saturating_threshold_activate=[-1,1];
-           if option.Scalemode==1
-               
-            [H,k,b]=Scale_feature(H,Saturating_threshold,option.Scale);
-          elseif option.Scalemode==2
-            [H,k,b]=Scale_feature_separately(H,Saturating_threshold,option.Scale);
-           end
-        end
-        H = sin(H);    
-    case {'hardlim'}
-        
-        H = double(hardlim(H));
-    case {'tribas'}
-       
-         if option.Scale
-          
-            Saturating_threshold=[-1,1];
-            Saturating_threshold_activate=[0,1];
-            if option.Scalemode==1
-         
-            [H,k,b]=Scale_feature(H,Saturating_threshold,option.Scale);
-            elseif option.Scalemode==2
-         
-             [H,k,b]=Scale_feature_separately(H,Saturating_threshold,option.Scale);
-            end
-        end
-        H = tribas(H);
-    case {'radbas'}
-       
-        if option.Scale
-           
-            Saturating_threshold=[-2.1,2.1];
-            Saturating_threshold_activate=[0,1];
-            if option.Scalemode==1
-          
-            [H,k,b]=Scale_feature(H,Saturating_threshold,option.Scale);
-           elseif option.Scalemode==2
-          
-            [H,k,b]=Scale_feature_separately(H,Saturating_threshold,option.Scale);
-            end
-        end
-        H = radbas(H);
-           
-    case {'sign'}
-        H = sign(H);
-end
-if option.bias
-   H=[H,ones(Nsample,1)]; 
-end
-if option.link
-    
-        switch option.Scalemode
-            case 1 
-            trainX_temp=trainX.*k+b;
-            H=[H,trainX_temp];
-            case 2
-            [trainX_temp,ktr,btr]=Scale_feature_separately(trainX,Saturating_threshold_activate,option.Scale);
-             H=[H,trainX_temp];
-            otherwise
-            H=[H,trainX];
-        end
-        
-end
+H = trainX;
+
+
+
 H(isnan(H))=0;
 
 %p_value = 50;
@@ -201,7 +97,8 @@ else if option.mode==1
      beta=H'*((eye(size(H,1))/C+H* H') \ trainY_temp); 
     end
     else
-      error('Unsupport mode, only Regularized least square and Moore-Penrose pseudoinverse are allowed. ')  
+      error('Unsupport mode, 
+        only Regularized least square and Moore-Penrose pseudoinverse are allowed. ')  
     end
 end
 trainY_temp=H*beta;
@@ -214,87 +111,11 @@ for i=1:Nsample
 
 Bias_test=repmat(Bias,numel(testY),1);
 H_test=testX*Weight+Bias_test;
- switch lower(option.ActivationFunction)
-    case {'sig','sigmoid'}
-        %%%%%%%% Sigmoid 
-         if option.Scale
-             if option.Scalemode==1
-            H_test=H_test.*k+b;
-            elseif option.Scalemode==2
-            nSamtest=size(H_test,1); 
-            kt=repmat(k,nSamtest,1);
-            bt=repmat(b,nSamtest,1);
-            H_test=H_test.*kt+bt;
-             end
-         end
-        H_test = 1 ./ (1 + exp(-H_test));
-    case {'sin','sine'}
-       
-       if option.Scale
-           if option.Scalemode==1
-            H_test=H_test.*k+b;
-           elseif option.Scalemode==2
-            nSamtest=size(H_test,1); 
-            kt=repmat(k,nSamtest,1);
-            bt=repmat(b,nSamtest,1);
-            H_test=H_test.*kt+bt;
-           end
-        end
-        H_test = sin(H_test);    
-    case {'hardlim'}
-       
-        H_test = double(hardlim(H_test));
-    case {'tribas'}
-       
-          if option.Scale
-              if option.Scalemode==1
-            H_test=H_test.*k+b;
-             elseif option.Scalemode==2
-            nSamtest=size(H_test,1); 
-            kt=repmat(k,nSamtest,1);
-            bt=repmat(b,nSamtest,1);
-            H_test=H_test.*kt+bt;
-              end
-         end
-        H_test = tribas(H_test);
-    case {'radbas'}
-       
-       
-          if option.Scale
-              if option.Scalemode==1
-                H_test=H_test.*k+b;
-              elseif option.Scalemode==2
-              nSamtest=size(H_test,1); 
-              kt=repmat(k,nSamtest,1);
-              bt=repmat(b,nSamtest,1);
-              H_test=H_test.*kt+bt;
-              end
-         end
-        H_test = radbas(H_test);
-     case {'sign'}
-         
-        H_test = sign(H_test);
-                        
-end
+H_test = testX;
+
+
  
-if option.bias
-   H_test=[H_test,ones(numel(testY),1)]; 
-end
-if option.link
-       switch option.Scalemode
-            case 1 
-           testX_temp=testX.*k+b;
-           H_test=[H_test,testX_temp];
-            case 2
-            nSamtest=size(H_test,1); 
-            kt=repmat(ktr,nSamtest,1);
-            bt=repmat(btr,nSamtest,1);
-            testX_temp=testX.*kt+bt;   
-            H_test=[H_test,testX_temp]; 
-            otherwise
-            H_test=[H_test,testX]; 
-        end
-end
+
 H_test(isnan(H_test))=0;
 if option.kernelFlag
     H_test = kernel_matrix(Htr,option.kernel, option.p_value, H_test);
